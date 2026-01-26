@@ -18,7 +18,7 @@ This PR implements the file and directory move functionality as requested in #10
 
 ## API Usage
 
-**Endpoint:** `POST /-/move`
+**Endpoint:** `POST /-/move` 
 
 **Parameters:**
 - `src`: Source path (relative to root)
@@ -26,8 +26,8 @@ This PR implements the file and directory move functionality as requested in #10
 - `overwrite`: Set to `true` to overwrite destination if it exists (optional, default: `false`)
 
 **Responses:**
-- `200 OK`: Success `{"success": true}`
-- `400 Bad Request`: Missing `src` or `dst`
+- `200 OK`: Success `{"success": true}` 
+- `400 Bad Request`: Missing `src` or `dst` 
 - `403 Forbidden`: Insufficient permissions
 - `404 Not Found`: Source does not exist
 - `409 Conflict`: Destination already exists
