@@ -9,6 +9,12 @@ This PR implements the file and directory move functionality as requested in #10
 - Refactored `getRealPath` to use a helper `resolvePath` method for consistent path resolution.
 - Added comprehensive permissions and existence checks.
 - Implemented overwrite logic for existing destinations.
+- Added comprehensive unit tests in `move_test.go` covering:
+    - Moving files and directories.
+    - Moving to new (non-existent) parent directories.
+    - Handling conflicts (destination already exists).
+    - Handling non-existent source.
+    - Permission checks.
 
 ## API Usage
 
