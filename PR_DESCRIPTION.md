@@ -1,39 +1,72 @@
-# 修复HTTP认证模式下Android浏览器下载APK失败的问题
+# Fix: APK download fails on Android when HTTP Basic Auth is enabled
 
-## 问题复现
-1. 开启 HTTP 认证: `./gohttpserver --auth-type http --auth-http admin:admin`
-2. 上传 APK 文件
-3. 使用 Android 手机扫码或浏览器直接访问(已登录后)点击下载或安装
-4. 华为手机浏览器返回"链接失效,文件下载失败"
+## Summary
 
-## 预期行为
-- 开启 HTTP 认证后,所有文件类型(包括 APK)都应该能正常下载
-- 与其他文件类型(如 txt)的行为保持一致
+When the server runs with `--auth-type http`, some Android browsers (notably stock browsers on Huawei and other OEMs) fail to download `.apk` files, often showing errors such as “link invalid” or “download failed.” Other file types (e.g. `.txt`) still open or download as expected. This change sets `Content-Disposition: attachment` for all APK responses so the browser treats the file as a download, matching the behavior already available via `?download=true` and avoiding fragile inline/package-install handling behind authenticated sessions.
 
-## 实际行为
-- 开启认证后,APK 文件无法下载
-- 关闭认证后 APK 可以正常下载
-- txt 文件在认证开启时可以正常浏览
+## Upstream references
 
-## 解决方案
+| Resource | URL |
+|----------|-----|
+| Repository | https://github.com/codeskyblue/gohttpserver |
+| Related issue | https://github.com/codeskyblue/gohttpserver/issues/136 |
 
-Android 浏览器在下载 APK 文件时,对 HTTP 响应头有特殊要求。当使用 HTTP Basic Authentication 且 Content-Type 为 `application/vnd.android.package-archive`(APK 的 MIME 类型)时,Android 浏览器会返回错误。
+## Problem
 
-**修改方案:**
-1. 在 `httpstaticserver.go` 的 `hIndex` 函数中,为 APK 文件下载添加特殊的 Content-Disposition 头
-2. 强制 APK 文件作为附件下载,而不是尝试在浏览器中打开
-3. 确保响应头包含明确的文件名和下载行为
+### Steps to reproduce
 
-## 技术细节
-- Android 浏览器对 APK 文件下载有特殊的安全检查机制
-- 某些 Android 设备在 HTTP 认证下对 APK 的 MIME 类型处理有问题
-- 通过设置适当的响应头,可以绕过这个限制
+1. Build and run with HTTP Basic Auth, for example:
+   ```bash
+   go build -o gohttpserver .
+   ./gohttpserver --port 8080 --auth-type http --auth-http admin:secret --upload
+   ```
+2. Place or upload an APK under the document root (e.g. `app-release.apk`).
+3. On an Android device on the same network, open the direct file URL in the browser (after completing Basic Auth).
+4. **Observed (before fix):** Download fails or the browser reports an invalid link; behavior varies by OEM.
+5. **Control:** With auth disabled, the same APK URL often works. With auth enabled, `?download=true` may work because it already sets `Content-Disposition: attachment`.
 
-## 相关 issue
-- #136: 开启http认证方式后,安卓浏览器下载apk失败
+### Expected behavior
 
-## 测试计划
-1. 测试开启 HTTP 认证后下载 APK 文件
-2. 测试华为、小米等不同品牌的 Android 设备
-3. 确认其他文件类型下载不受影响
-4. 确认关闭认证后功能正常
+- With HTTP auth enabled, APKs should download (or open the system installer) reliably, consistent with using `?download=true`.
+
+## Root cause (analysis)
+
+Android WebView / stock browsers apply stricter handling for `application/vnd.android.package-archive` responses. Without an explicit `Content-Disposition: attachment` (and a stable filename), some builds refuse to complete the download when the request is authenticated (extra security prompts and MIME sniffing). Forcing attachment aligns APK delivery with explicit download semantics and reduces OEM-specific failures.
+
+## Solution
+
+In `httpstaticserver.go`, function `hIndex`, before `http.ServeFile`:
+
+- If the request path has extension `.apk`, set:
+  - `Content-Disposition: attachment; filename="<quoted-basename>"`
+- Existing logic for `?download=true` is unchanged and still sets the same header for any file type.
+
+Relevant code path: [`httpstaticserver.go`](https://github.com/codeskyblue/gohttpserver/blob/master/httpstaticserver.go) (search for `Fix #136` or `.apk`).
+
+## Impact
+
+- **Scoped to:** raw GET of files ending in `.apk` (same branch as `ServeFile`).
+- **Unchanged:** directory listings, JSON APIs, upload/delete, IPA plist routes, other extensions.
+- **Compatibility:** Same header pattern as the existing `download=true` branch; uses `strconv.Quote` for safe filename quoting.
+
+## How to verify locally
+
+See **[TEST_STEPS.md](./TEST_STEPS.md)** for build commands, auth/no-auth scenarios, Android checks, and optional `curl` header inspection.
+
+### Quick smoke test (desktop)
+
+```bash
+go build -o /tmp/gohttpserver .
+/tmp/gohttpserver --port 8080 --auth-type http --auth-http admin:secret --root ./testdata &
+# Place a small test.apk under testdata or use -root pointing to a folder containing an APK
+curl -sI -u admin:secret "http://127.0.0.1:8080/your.apk" | grep -i content-disposition
+# Expect: Content-Disposition: attachment; filename="your.apk"
+```
+
+Stop the server when finished.
+
+## Checklist for maintainers
+
+- [ ] Reproduce on Android + HTTP auth before/after (see TEST_STEPS.md).
+- [ ] Confirm non-APK files (images, text) still inline or behave as before.
+- [ ] Close or link https://github.com/codeskyblue/gohttpserver/issues/136 when merged.

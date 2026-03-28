@@ -13,6 +13,8 @@ Alternatives
 - 目标: 做最好的HTTP文件服务器
 - 功能: 人性化的UI体验，文件的上传支持，安卓和苹果安装包的二维码直接生成。
 
+**Maintainer / PR notes (APK + HTTP auth):** [PR_DESCRIPTION.md](PR_DESCRIPTION.md) · [TEST_STEPS.md](TEST_STEPS.md) · [issue #136](https://github.com/codeskyblue/gohttpserver/issues/136)
+
 **Binaries** can be downloaded from [this repo releases](https://github.com/codeskyblue/gohttpserver/releases/)
 
 ## Requirements
