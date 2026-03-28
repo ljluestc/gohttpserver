@@ -155,6 +155,11 @@ func (s *HTTPStaticServer) hIndex(w http.ResponseWriter, r *http.Request) {
 		}
 		renderHTML(w, "assets/index.html", s)
 	} else {
+		// Fix #136: Android browser fails to download APK when HTTP auth is enabled
+		// Force APK files to be downloaded as attachment
+		if filepath.Ext(path) == ".apk" {
+			w.Header().Set("Content-Disposition", "attachment; filename="+strconv.Quote(filepath.Base(path)))
+		}
 		if filepath.Base(path) == YAMLCONF {
 			auth := s.readAccessConf(realPath)
 			if !auth.Delete {
